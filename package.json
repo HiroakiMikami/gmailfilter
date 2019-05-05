@@ -2,6 +2,9 @@
   "name": "gmailfilter",
   "version": "0.0.0",
   "description": "",
+  "bin": {
+    "gmailfilters": "out/src/cli.js"
+  },
   "main": "index.js",
   "scripts": {
     "compile": "$(npm bin)/tsc -p ./",
