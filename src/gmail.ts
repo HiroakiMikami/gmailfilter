@@ -1,6 +1,7 @@
 import * as google from "googleapis"
 import { OAuth2Client } from "googleapis-common"
 import * as readline from "readline"
+import { FilterUtils } from "./utils"
 
 const SCOPES = ["https://www.googleapis.com/auth/gmail.labels", "https://www.googleapis.com/auth/gmail.settings.basic"]
 
@@ -81,25 +82,31 @@ export class GmailClient {
 
     public async setFilters(filters: google.gmail_v1.Schema$Filter[]) {
         const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
-        const currentFilters = await this.getFilters()
-
-        /* delete all filters */
-        let cnt = 0
-        for (const filter of currentFilters) {
-            cnt += 1
-            console.log(`Deleting ${cnt} of ${currentFilters.length} filters`)
-            await gmail.users.settings.filters.delete({ id: filter.id, userId: "me" })
-        }
+        const currentFilters = new Set(await this.getFilters())
 
         /* create filters */
-        cnt = 0
+        let cnt = 0
         for (const filter of filters) {
             cnt += 1
-            console.log(`Creating ${cnt} of ${filters.length} filters`)
-            await gmail.users.settings.filters.create({
-                requestBody: filter,
-                userId: "me",
-            })
+            const filter2 = Array.from(currentFilters).find((f) => FilterUtils.equals(filter, f))
+            if (filter2) {
+                currentFilters.delete(filter2)
+            } else {
+                console.log(`Creating ${cnt} of ${filters.length} filters`)
+                await gmail.users.settings.filters.create({
+                    requestBody: filter,
+                    userId: "me",
+                })
+            }
+        }
+
+        /* delete all filters */
+        cnt = 0
+        for (const filter of Array.from(currentFilters)) {
+            cnt += 1
+            console.log(`Deleting ${cnt} of ${currentFilters.size} filters`)
+            await gmail.users.settings.filters.delete({ id: filter.id, userId: "me" })
+
         }
     }
 
