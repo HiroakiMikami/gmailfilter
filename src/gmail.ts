@@ -79,7 +79,7 @@ export class GmailClient {
             )
         })
 
-        return filters
+        return filters || []
     }
 
     public getToken(): string {
