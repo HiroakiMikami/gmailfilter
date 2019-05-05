@@ -93,6 +93,10 @@ async function main() {
     })
     const filterConfigs: Filter[] = eval(prefix + filterConfigStr)
     const filters: google.gmail_v1.Schema$Filter[] = [].concat.apply([], filterConfigs.map(evaluate))
+    console.log(`Converting the label names to label ids`)
+    for (const filter of filters) {
+        filter.action = await client.convertLabelNameToId(filter.action)
+    }
 
     if (commander.dryrun) {
         for (const filter of filters) {

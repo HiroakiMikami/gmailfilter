@@ -14,6 +14,7 @@ export interface ICredentials {
 
 export class GmailClient {
     private oAuth2Client: OAuth2Client
+    private labels: Promise<ReadonlyMap<string, string>>
     constructor(private credentials: ICredentials, private tokens: any | null) {}
     public async authorize() {
         /* Reference: https://developers.google.com/gmail/api/quickstart/nodejs */
@@ -38,6 +39,50 @@ export class GmailClient {
         }
 
         this.oAuth2Client.setCredentials(this.tokens)
+    }
+
+    public async convertLabelNameToId(action: google.gmail_v1.Schema$FilterAction) {
+        if (!this.labels) {
+            this.labels = new Promise((resolve, reject) => {
+                const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
+                gmail.users.labels.list(
+                    { userId: "me" },
+                    (err, res) => {
+                        if (err) {
+                            reject(err)
+                        } else {
+                            const m = new Map<string, string>()
+                            for (const label of res.data.labels) {
+                                m.set(label.name, label.id)
+                            }
+                            resolve(m)
+                        }
+                    },
+                )
+            })
+        }
+
+        const labels = await this.labels
+        const retval: google.gmail_v1.Schema$FilterAction = { forward: action.forward }
+        if (action.addLabelIds) {
+            retval.addLabelIds = action.addLabelIds.map((label) => {
+                if (labels.has(label)) {
+                    return labels.get(label)
+                } else {
+                    return label
+                }
+            })
+        }
+        if (action.removeLabelIds) {
+            retval.removeLabelIds = action.removeLabelIds.map((label) => {
+                if (labels.has(label)) {
+                    return labels.get(label)
+                } else {
+                    return label
+                }
+            })
+        }
+        return retval
     }
 
     public async setFilters(filters: google.gmail_v1.Schema$Filter[]) {
