@@ -84,13 +84,13 @@ describe("DSL", () => {
     })
     describe("#toQuery", () => {
         it("create a query string from CondIf", () => {
-            $.toQuery(new $.CondIfWithKey(K("key"), $.PredicateWithKey.Is, "value")).should.equal("key:value")
+            $.toQuery(new $.CondIfWithKey(K("key"), $.PredicateWithKey.Is, "value")).should.equal("key:\"value\"")
             $.toQuery(new $.CondIfWithKey(K("size"), $.PredicateWithKey.Larger, 0)).should.equal("larger:0")
             $.toQuery(new $.CondIfWithKey(K("size"), $.PredicateWithKey.Smaller, 0)).should.equal("smaller:0")
             $.toQuery(new $.CondIfWithoutKey($ .PredicateWithoutKey.Has, "attachment")).should.equal("has:attachment")
         })
         it("create a query string from CondCase and Key", () => {
-            $.toQuery(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.equal("key:0")
+            $.toQuery(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.equal("key:\"0\"")
             $.toQuery(new $.CondCase($.PredicateWithKey.Larger, 0), K("size")).should.equal("larger:0")
             $.toQuery(new $.CondCase($.PredicateWithKey.Smaller, 0), K("size")).should.equal("smaller:0")
         })
@@ -101,9 +101,9 @@ describe("DSL", () => {
     })
     describe("#toCriteria", () => {
         it("create a criteria instance", () => {
-            $.toCriteria(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.deep.equal({ query: "key:0" })
+            $.toCriteria(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.deep.equal({ query: "key:\"0\"" })
             $.toCriteria(new $.CondCase($.PredicateWithKey.Is, 0, true), K("key"))
-                .should.deep.equal({ negatedQuery: "key:0" })
+                .should.deep.equal({ negatedQuery: "key:\"0\"" })
         })
     })
     describe("Criteria", () => {
@@ -137,7 +137,7 @@ describe("DSL", () => {
             $.evaluate(If(K("subject").Is("foo"), {})).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:foo" },
+                    criteria: { query: "subject:\"foo\"" },
                 },
             ])
         })
@@ -148,11 +148,11 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:foo" },
+                    criteria: { query: "subject:\"foo\"" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:foo to:bar" },
+                    criteria: { negatedQuery: "subject:\"foo\" to:\"bar\"" },
                 },
             ])
         })
@@ -163,11 +163,11 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:foo" },
+                    criteria: { query: "subject:\"foo\"" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:foo" },
+                    criteria: { negatedQuery: "subject:\"foo\"" },
                 },
             ])
         })
@@ -179,15 +179,15 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:foo" },
+                    criteria: { query: "subject:\"foo\"" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:foo to:bar" },
+                    criteria: { negatedQuery: "subject:\"foo\" to:\"bar\"" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:bar", negatedQuery: "subject:foo" },
+                    criteria: { query: "to:\"bar\"", negatedQuery: "subject:\"foo\"" },
                 },
             ])
         })
@@ -203,11 +203,11 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:value" },
+                    criteria: { query: "to:\"value\"" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:value2" },
+                    criteria: { query: "to:\"value2\"" },
                 },
             ])
         })
@@ -220,15 +220,15 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:value" },
+                    criteria: { query: "to:\"value\"" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:value2" },
+                    criteria: { query: "to:\"value2\"" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "to:value to:value2" },
+                    criteria: { negatedQuery: "to:\"value\" to:\"value2\"" },
                 },
             ])
         })
@@ -241,7 +241,7 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "is:starred to:foo@bar" },
+                    criteria: { query: "is:starred to:\"foo@bar\"" },
                 },
                 {
                     action: {},
@@ -262,7 +262,7 @@ describe("DSL", () => {
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "is:starred", query: "to:foo@bar" },
+                    criteria: { negatedQuery: "is:starred", query: "to:\"foo@bar\"" },
                 },
             ])
         })
@@ -275,11 +275,11 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:foo@bar is:starred" },
+                    criteria: { query: "to:\"foo@bar\" is:starred" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "to:foo@bar" },
+                    criteria: { negatedQuery: "to:\"foo@bar\"" },
                 },
             ])
         })
@@ -292,11 +292,11 @@ describe("DSL", () => {
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:foo@bar" },
+                    criteria: { query: "to:\"foo@bar\"" },
                 },
                 {
                     action: {},
-                    criteria: { query: "is:starred", negatedQuery: "to:foo@bar" },
+                    criteria: { query: "is:starred", negatedQuery: "to:\"foo@bar\"" },
                 },
             ])
         })

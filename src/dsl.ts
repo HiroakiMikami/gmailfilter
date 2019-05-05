@@ -94,7 +94,7 @@ export function toQuery(cond: CondCase, key: Key): string
 export function toQuery(cond: CondIf | CondCase, key?: Key): string {
     if (cond instanceof CondIfWithKey) {
         if (cond.predicate === PredicateWithKey.Is) {
-            return `${cond.key.keyName}:${cond.value}`
+            return `${cond.key.keyName}:"${cond.value}"`
         } else {
             if (cond.key.keyName !== "size") {
                 throw new EvaluationError(`Larger|Smaller is not used with ${cond.key.keyName} key`)
@@ -105,7 +105,7 @@ export function toQuery(cond: CondIf | CondCase, key?: Key): string {
         return `${PredicateWithoutKey.stringify(cond.predicate)}:${cond.value}`
     } else {
         if (cond.predicate === PredicateWithKey.Is) {
-            return `${key.keyName}:${cond.value}`
+            return `${key.keyName}:"${cond.value}"`
         } else {
             if (key.keyName !== "size") {
                 throw new EvaluationError(`Larger|Smaller is not used with ${key.keyName} key`)
