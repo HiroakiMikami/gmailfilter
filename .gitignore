@@ -9,3 +9,5 @@
 !/tsconfig.json
 !/tslint.json
 !/.circleci/config.yml
+!/src/*.ts
+!/test/*.ts
