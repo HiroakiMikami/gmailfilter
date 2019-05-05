@@ -231,5 +231,31 @@ export function evaluate(filter: Filter): google.gmail_v1.Schema$Filter[] {
             }
         }
     }
-    return filters
+
+    // split addLabelIds
+    const retval = []
+    for (const f of filters) {
+        if (f.action.addLabelIds) {
+            f.action.addLabelIds.forEach((label, index) => {
+                if (index === 0) {
+                    retval.push({
+                        action: {
+                            addLabelIds: [label],
+                            removeLabelIds: f.action.removeLabelIds,
+                        },
+                        criteria: f.criteria,
+                    })
+                } else {
+                    retval.push({
+                        action: { addLabelIds: [label] },
+                        criteria: f.criteria,
+                    })
+                }
+            })
+        } else {
+            retval.push(f)
+        }
+    }
+
+    return retval
 }

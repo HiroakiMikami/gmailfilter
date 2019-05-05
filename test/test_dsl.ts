@@ -305,5 +305,19 @@ describe("DSL", () => {
                 },
             ])
         })
+        it("split addLabelIds", () => {
+            $.evaluate(
+                Match(K("to")).Case("foo@bar", {addLabelIds: ["foo", "bar"], removeLabelIds: ["test"] }),
+            ).should.deep.equal([
+                {
+                    action: {addLabelIds: ["foo"], removeLabelIds: ["test"] },
+                    criteria: { query: "to:\"foo@bar\"" },
+                },
+                {
+                    action: { addLabelIds: ["bar"] },
+                    criteria: { query: "to:\"foo@bar\"" },
+                },
+            ])
+        })
     })
 })
