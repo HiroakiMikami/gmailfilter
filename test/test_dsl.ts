@@ -27,33 +27,36 @@ describe("DSL", () => {
         })
         it("create instances of If", () => {
             If(K("key").Is("value"), {}).should.deep.equal(
-                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"), {}, [], null))
+                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"),
+                [{}], [], null))
             If(K("key").Is("value"), {}).Else({}).should.deep.equal(
-                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"), {}, [], new $.Else({})))
-            If(K("key").Is("value1"), {})
+                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"),
+                [{}], [], new $.Else([{}])))
+            If(K("key").Is("value1"), [{}, {}])
              .Elif(K("key").Is("value2"), {})
              .Elif(K("key").Is("value3"), {})
              .Else({})
             .should.deep.equal(
-                 new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value1"), {},
+                 new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value1"),
+                 [{}, {}],
                  [
-                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value2"), {}),
-                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value3"), {}),
+                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value2"), [{}]),
+                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value3"), [{}]),
                  ],
-                 new $.Else({}),
+                 new $.Else([{}]),
             ))
         })
         it("create instances of Match", () => {
             Match(K("key"))
                 .Case("value", {})
             .should.deep.equal(
-                new $.Match(new $.Key("key"), [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), {})], null))
+                new $.Match(new $.Key("key"), [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), [{}])], null))
             Match(K("key"))
                 .Case("value", {})
                 .Otherwise({})
             .should.deep.equal(
                 new $.Match(new $.Key("key"),
-                    [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), {})], new $.Otherwise({})))
+                    [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), [{}])], new $.Otherwise([{}])))
         })
         it("complex case", () => {
             Match(K("key"))
@@ -65,10 +68,12 @@ describe("DSL", () => {
                 new $.Match(new $.Key("key"),
                 [
                     new $.Case(new $.CondCase($.PredicateWithKey.Is, "value", true),
-                        new $.If(new $.CondIfWithKey(new $.Key("key2"), $.PredicateWithKey.Is, "foo"), {}, [],
-                        new $.Else({}))),
+                        [
+                            new $.If(new $.CondIfWithKey(new $.Key("key2"), $.PredicateWithKey.Is, "foo"), [{}], [],
+                            new $.Else([{}])),
+                        ]),
                 ],
-                new $.Otherwise({})),
+                new $.Otherwise([{}])),
             )
         })
     })
@@ -297,6 +302,20 @@ describe("DSL", () => {
                 {
                     action: {},
                     criteria: { query: "is:starred", negatedQuery: "to:\"foo@bar\"" },
+                },
+            ])
+        })
+        it("split addLabelIds", () => {
+            $.evaluate(
+                Match(K("to")).Case("foo@bar", {addLabelIds: ["foo", "bar"], removeLabelIds: ["test"] }),
+            ).should.deep.equal([
+                {
+                    action: {addLabelIds: ["foo"], removeLabelIds: ["test"] },
+                    criteria: { query: "to:\"foo@bar\"" },
+                },
+                {
+                    action: { addLabelIds: ["bar"] },
+                    criteria: { query: "to:\"foo@bar\"" },
                 },
             ])
         })

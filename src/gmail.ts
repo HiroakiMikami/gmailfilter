@@ -43,27 +43,21 @@ export class GmailClient {
 
     public async convertLabelNameToId(action: google.gmail_v1.Schema$FilterAction) {
         if (!this.labels) {
-            this.labels = new Promise((resolve, reject) => {
-                const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
-                gmail.users.labels.list(
-                    { userId: "me" },
-                    (err, res) => {
-                        if (err) {
-                            reject(err)
-                        } else {
-                            const m = new Map<string, string>()
-                            for (const label of res.data.labels) {
-                                m.set(label.name, label.id)
-                            }
-                            resolve(m)
-                        }
-                    },
-                )
+            const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
+            this.labels = gmail.users.labels.list({ userId: "me" }).then((res) => {
+                const m = new Map<string, string>()
+                for (const label of res.data.labels) {
+                    m.set(label.name, label.id)
+                }
+                return m
             })
         }
 
         const labels = await this.labels
-        const retval: google.gmail_v1.Schema$FilterAction = { forward: action.forward }
+        const retval: google.gmail_v1.Schema$FilterAction = {}
+        if (action.forward) {
+            retval.forward = action.forward
+        }
         if (action.addLabelIds) {
             retval.addLabelIds = action.addLabelIds.map((label) => {
                 if (labels.has(label)) {
@@ -102,7 +96,7 @@ export class GmailClient {
         for (const filter of filters) {
             cnt += 1
             console.log(`Creating ${cnt} of ${filters.length} filters`)
-            gmail.users.settings.filters.create({
+            await gmail.users.settings.filters.create({
                 requestBody: filter,
                 userId: "me",
             })
@@ -111,18 +105,8 @@ export class GmailClient {
 
     public async getFilters() {
         const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
-        const filters: google.gmail_v1.Schema$Filter[] = await new Promise((resolve, reject) => {
-            gmail.users.settings.filters.list(
-                { userId: "me"},
-                (err, res) => {
-                    if (err) {
-                        reject(err)
-                    } else {
-                        resolve(res.data.filter)
-                    }
-                },
-            )
-        })
+        const filters: google.gmail_v1.Schema$Filter[] =
+            (await gmail.users.settings.filters.list({ userId: "me"})).data.filter
 
         return filters || []
     }

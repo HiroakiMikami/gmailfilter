@@ -1,28 +1,37 @@
 import * as $ from "./dsl"
 
+type Body = $.Expression | ReadonlyArray<$.Expression>
+function toBody(body: Body) {
+    if (Array.isArray(body)) {
+        return body
+    } else {
+        return [body]
+    }
+}
+
 /* DSL */
 class MatchDSL extends $.Match {
-    public Case(cond: $.CondCase | string | number, body: $.Body) {
+    public Case(cond: $.CondCase | string | number, body: Body) {
         const cases = Array.from(this.caseBlock)
         if (cond instanceof $.CondCase) {
-            cases.push(new $.Case(cond, body))
+            cases.push(new $.Case(cond, toBody(body)))
         } else {
-            cases.push(new $.Case(new $.CondCase($.PredicateWithKey.Is, cond), body))
+            cases.push(new $.Case(new $.CondCase($.PredicateWithKey.Is, cond), toBody(body)))
         }
         return new MatchDSL(this.key, cases, null)
     }
-    public Otherwise(body: $.Body) {
-        return new $.Match(this.key, this.caseBlock, new $.Otherwise(body))
+    public Otherwise(body: Body) {
+        return new $.Match(this.key, this.caseBlock, new $.Otherwise(toBody(body)))
     }
 }
 class IfDSL extends $.If {
-    public Elif(cond: $.CondIf, body: $.Body) {
+    public Elif(cond: $.CondIf, body: Body) {
         const elif = Array.from(this.elifBlock)
-        elif.push(new $.Elif(cond, body))
+        elif.push(new $.Elif(cond, toBody(body)))
         return new IfDSL(this.cond, this.body, elif, null)
     }
-    public Else(body: $.Body) {
-        return new $.If(this.cond, this.body, this.elifBlock, new $.Else(body))
+    public Else(body: Body) {
+        return new $.If(this.cond, this.body, this.elifBlock, new $.Else(toBody(body)))
     }
 }
 class KeyDSL extends $.Key {
@@ -40,8 +49,8 @@ class KeyDSL extends $.Key {
 export function Match(key: $.Key) {
     return new MatchDSL(key, [], null)
 }
-export function If(cond: $.CondIf, body: $.Body) {
-        return new IfDSL(cond, body, [], null)
+export function If(cond: $.CondIf, body: Body) {
+        return new IfDSL(cond, toBody(body), [], null)
     }
 export function K(name: string) {
     return new KeyDSL(name)

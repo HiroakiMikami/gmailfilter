@@ -2,7 +2,8 @@ import * as google from "googleapis"
 
 /*
  * Filter        := Match | If
- * Body          := Action | Filter
+ * Expression    := Action | Filter
+ * Body          := Expression | Expression*
  * Match         := match Key Case* [Otherwise]
  * Case          := case CaseCond Body
  * Otherwise     := otherwise Body
@@ -23,29 +24,29 @@ export enum PredicateWithoutKey {
 export type Action = google.gmail_v1.Schema$FilterAction
 
 export type Filter = Match | If
-export type Body = Action | Filter
+export type Expression = Action | Filter
 export class Match {
     constructor(public key: Key, public caseBlock: ReadonlyArray<Case>, public otherwiseBlock: Otherwise | null) {}
 }
 export class Case {
-    constructor(public cond: CondCase, public body: Body) {}
+    constructor(public cond: CondCase, public body: ReadonlyArray<Expression>) {}
 }
 export class Otherwise {
-    constructor(public body: Body) {}
+    constructor(public body: ReadonlyArray<Expression>) {}
 }
 export class CondCase {
     constructor(public predicate: PredicateWithKey, public value: number | string, public not: boolean = false) {}
 }
 
 export class If {
-    constructor(public cond: CondIf, public body: Body,
+    constructor(public cond: CondIf, public body: ReadonlyArray<Expression>,
                 public elifBlock: ReadonlyArray<Elif>, public elseBlock: Else | null) {}
 }
 export class Elif {
-    constructor(public cond: CondIf, public body: Body) {}
+    constructor(public cond: CondIf, public body: ReadonlyArray<Expression>) {}
 }
 export class Else {
-    constructor(public body: Body) {}
+    constructor(public body: ReadonlyArray<Expression>) {}
 }
 export type CondIf = CondIfWithKey | CondIfWithoutKey
 export class CondIfWithKey {
@@ -162,6 +163,26 @@ export namespace Criteria {
         return retval
     }
 }
+export function evaluateBody(body: ReadonlyArray<Expression>, c: google.gmail_v1.Schema$FilterCriteria) {
+    const filters = []
+    for (const exp of body) {
+        if (exp instanceof If || exp instanceof Match) {
+            const fs = evaluate(exp)
+            for (const f of fs) {
+                filters.push({
+                    action: f.action,
+                    criteria: Criteria.merge([c, f.criteria]),
+                })
+            }
+        } else {
+            filters.push({
+                action: exp,
+                criteria: c,
+            })
+        }
+    }
+    return filters
+}
 export function evaluate(filter: Filter): google.gmail_v1.Schema$Filter[] {
     const filters: google.gmail_v1.Schema$Filter[] = []
 
@@ -176,37 +197,15 @@ export function evaluate(filter: Filter): google.gmail_v1.Schema$Filter[] {
             const c1 = Criteria.merge([c, criteria])
             c = Criteria.merge([c, Criteria.not(criteria)])
 
-            if (elif.body instanceof If || elif.body instanceof Match) {
-                const fs = evaluate(elif.body)
-                for (const f of fs) {
-                    filters.push({
-                        action: f.action,
-                        criteria: Criteria.merge([c1, f.criteria]),
-                    })
-                }
-            } else {
-                filters.push({
-                    action: elif.body,
-                    criteria: c1,
-                })
+            for (const f of evaluateBody(elif.body, c1)) {
+                filters.push(f)
             }
         }
 
         // Else
         if (filter.elseBlock) {
-            if (filter.elseBlock.body instanceof If || filter.elseBlock.body instanceof Match) {
-                const fs = evaluate(filter.elseBlock.body)
-                for (const f of fs) {
-                    filters.push({
-                        action: f.action,
-                        criteria: Criteria.merge([c, f.criteria]),
-                    })
-                }
-            } else {
-                filters.push({
-                    action: filter.elseBlock.body,
-                    criteria: c,
-                })
+            for (const f of evaluateBody(filter.elseBlock.body, c)) {
+                filters.push(f)
             }
         }
     } else {
@@ -220,39 +219,43 @@ export function evaluate(filter: Filter): google.gmail_v1.Schema$Filter[] {
             const criteria = toCriteria(ca.cond, filter.key)
             c = Criteria.merge([c, Criteria.not(criteria)])
 
-            if (ca.body instanceof If || ca.body instanceof Match) {
-                const fs = evaluate(ca.body)
-                for (const f of fs) {
-                    filters.push({
-                        action: f.action,
-                        criteria: Criteria.merge([criteria, f.criteria]),
-                    })
-                }
-            } else {
-                filters.push({
-                    action: ca.body,
-                    criteria,
-                })
+            for (const f of evaluateBody(ca.body, criteria)) {
+                filters.push(f)
             }
         }
 
         // Otherwise
         if (filter.otherwiseBlock) {
-            if (filter.otherwiseBlock.body instanceof If || filter.otherwiseBlock.body instanceof Match) {
-                const fs = evaluate(filter.otherwiseBlock.body)
-                for (const f of fs) {
-                    filters.push({
-                        action: f.action,
-                        criteria: Criteria.merge([c, f.criteria]),
-                    })
-                }
-            } else {
-                filters.push({
-                    action: filter.otherwiseBlock.body,
-                    criteria: c,
-                })
+            for (const f of evaluateBody(filter.otherwiseBlock.body, c)) {
+                filters.push(f)
             }
         }
     }
-    return filters
+
+    // split addLabelIds
+    const retval = []
+    for (const f of filters) {
+        if (f.action.addLabelIds) {
+            f.action.addLabelIds.forEach((label, index) => {
+                if (index === 0) {
+                    retval.push({
+                        action: {
+                            addLabelIds: [label],
+                            removeLabelIds: f.action.removeLabelIds,
+                        },
+                        criteria: f.criteria,
+                    })
+                } else {
+                    retval.push({
+                        action: { addLabelIds: [label] },
+                        criteria: f.criteria,
+                    })
+                }
+            })
+        } else {
+            retval.push(f)
+        }
+    }
+
+    return retval
 }
