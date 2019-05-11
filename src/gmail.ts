@@ -67,9 +67,9 @@ export class GmailClient {
         for (const label of labels) {
             await gmail.users.labels.create({
                 requestBody: {
-                    name: label
+                    name: label,
                 },
-                userId: "me"
+                userId: "me",
             })
             if (callback && callback.create) {
                 await callback.create(label, cnt, labels.length)
@@ -115,18 +115,18 @@ export class GmailClient {
     public async applyFilter(filter: google.gmail_v1.Schema$Filter) {
         const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
         const messages = await gmail.users.messages.list({
+            q: filter.criteria.query,
             userId: "me",
-            q: filter.criteria.query
         })
-        const ids = (messages.data.messages || []).map(x => x.id)
+        const ids = (messages.data.messages || []).map((x) => x.id)
         for (let i = 0; i < ids.length; i += 1000) {
             await gmail.users.messages.batchModify({
                 requestBody: {
                     addLabelIds: filter.action.addLabelIds,
                     ids: ids.slice(i, Math.min(i + 1000, ids.length)),
-                    removeLabelIds: filter.action.removeLabelIds
+                    removeLabelIds: filter.action.removeLabelIds,
                 },
-                userId: "me"
+                userId: "me",
             })
         }
         return

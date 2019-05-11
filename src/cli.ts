@@ -105,19 +105,19 @@ async function main() {
 
     if (commander.createLabel && !commander.dryrun) {
         console.log(`Creating the labels`)
-        const labels = await client.getLabels()
-        let neededLabels = new Set<string>()
+        const ls = await client.getLabels()
+        const neededLabels = new Set<string>()
         for (const filter of filters) {
             if (filter.action.addLabelIds) {
                 for (const label of filter.action.addLabelIds) {
-                    if (!labels.has(label)) {
+                    if (!ls.has(label)) {
                         neededLabels.add(label)
                     }
                 }
             }
             if (filter.action.removeLabelIds) {
                 for (const label of filter.action.removeLabelIds) {
-                    if (!labels.has(label)) {
+                    if (!ls.has(label)) {
                         neededLabels.add(label)
                     }
                 }
@@ -129,14 +129,14 @@ async function main() {
                 create: async (label, index, length) => {
                     console.log(`Creating ${index + 1} of ${length} label (${label})`)
                     return
-                }
+                },
             })
     }
 
     console.log(`Converting the label names to label ids`)
     const labels = await client.getLabels()
     for (const filter of filters) {
-        let action: google.gmail_v1.Schema$FilterAction = {}
+        const action: google.gmail_v1.Schema$FilterAction = {}
         if (filter.action.forward) {
             action.forward = action.forward
         }
@@ -159,17 +159,17 @@ async function main() {
         }
     } else {
         console.log(`Updating filters`)
-        let fs: google.gmail_v1.Schema$Filter[] = []
+        const xs: google.gmail_v1.Schema$Filter[] = []
         await client.setFilters(
             filters,
             {
-                insert: async (f, i, length) => {
-                    fs.push(f)
-                    console.log(`Creating ${i + 1} of ${length} filter`)
-                    return
-                },
                 delete: async (_, i, length) => {
                     console.log(`Deleting ${i + 1} of ${length} filter`)
+                    return
+                },
+                insert: async (f, i, length) => {
+                    xs.push(f)
+                    console.log(`Creating ${i + 1} of ${length} filter`)
                     return
                 },
             })
@@ -177,8 +177,8 @@ async function main() {
         if (commander.applyFilter) {
             console.log(`Applying filters`)
             let cnt = 0
-            for (const filter of fs) {
-                console.log(`Applying ${cnt + 1} of ${fs.length} filter`)
+            for (const filter of xs) {
+                console.log(`Applying ${cnt + 1} of ${xs.length} filter`)
                 await client.applyFilter(filter)
 
                 cnt += 1
