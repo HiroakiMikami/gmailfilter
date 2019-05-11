@@ -111,7 +111,18 @@ async function main() {
         }
     } else {
         console.log(`Updating filters`)
-        await client.setFilters(filters)
+        await client.setFilters(
+            filters,
+            {
+                insert: async (_, i, length) => {
+                    console.log(`Creating ${i + 1} of ${length} filters`)
+                    return
+                },
+                delete: async (_, i, length) => {
+                    console.log(`Deleting ${i + 1} of ${length} filters`)
+                    return
+                },
+            })
     }
 }
 

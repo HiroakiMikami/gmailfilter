@@ -12,6 +12,10 @@ export interface ICredentials {
         redirect_uris: string[],
     }
 }
+export interface ISetFiltersCallback {
+    insert?: (filter: google.gmail_v1.Schema$Filter, index: number, length: number) => Promise<void>
+    delete?: (filter: google.gmail_v1.Schema$Filter, index: number, length: number) => Promise<void>
+}
 
 export class GmailClient {
     private oAuth2Client: OAuth2Client
@@ -80,33 +84,38 @@ export class GmailClient {
         return retval
     }
 
-    public async setFilters(filters: google.gmail_v1.Schema$Filter[]) {
+    public async setFilters(
+        filters: google.gmail_v1.Schema$Filter[],
+        callback?: ISetFiltersCallback) {
         const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
         const currentFilters = new Set(await this.getFilters())
 
         /* create filters */
         let cnt = 0
         for (const filter of filters) {
-            cnt += 1
             const filter2 = Array.from(currentFilters).find((f) => FilterUtils.equals(filter, f))
             if (filter2) {
                 currentFilters.delete(filter2)
             } else {
-                console.log(`Creating ${cnt} of ${filters.length} filters`)
+                if (callback && callback.insert) {
+                    await callback.insert(filter, cnt, filters.length)
+                }
                 await gmail.users.settings.filters.create({
                     requestBody: filter,
                     userId: "me",
                 })
             }
+            cnt += 1
         }
 
         /* delete all filters */
         cnt = 0
         for (const filter of Array.from(currentFilters)) {
-            cnt += 1
-            console.log(`Deleting ${cnt} of ${currentFilters.size} filters`)
+            if (callback && callback.delete) {
+                await callback.delete(filter, cnt, currentFilters.size)
+            }
             await gmail.users.settings.filters.delete({ id: filter.id, userId: "me" })
-
+            cnt += 1
         }
     }
 
