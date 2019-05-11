@@ -31,6 +31,8 @@ async function main() {
         .option("--token-path <path>", "The path of the token file")
         .option("--backup <path>", "Create backup of filters before updating")
         .option("--dryrun")
+        .option("--create-label")
+        .option("--apply-filter")
         .option("--filter <path>", "The filter JavaScript file")
         .parse(process.argv)
 
@@ -100,9 +102,55 @@ async function main() {
     })
     const filterConfigs: Filter[] = eval(prefix + filterConfigStr)
     const filters: google.gmail_v1.Schema$Filter[] = [].concat.apply([], filterConfigs.map(evaluate))
+
+    if (commander.createLabel && !commander.dryrun) {
+        console.log(`Creating the labels`)
+        const ls = await client.getLabels()
+        const neededLabels = new Set<string>()
+        for (const filter of filters) {
+            if (filter.action.addLabelIds) {
+                for (const label of filter.action.addLabelIds) {
+                    if (!ls.has(label)) {
+                        neededLabels.add(label)
+                    }
+                }
+            }
+            if (filter.action.removeLabelIds) {
+                for (const label of filter.action.removeLabelIds) {
+                    if (!ls.has(label)) {
+                        neededLabels.add(label)
+                    }
+                }
+            }
+        }
+        await client.createLabels(
+            Array.from(neededLabels),
+            {
+                create: async (label, index, length) => {
+                    console.log(`Creating ${index + 1} of ${length} label (${label})`)
+                    return
+                },
+            })
+    }
+
     console.log(`Converting the label names to label ids`)
+    const labels = await client.getLabels()
     for (const filter of filters) {
-        filter.action = await client.convertLabelNameToId(filter.action)
+        const action: google.gmail_v1.Schema$FilterAction = {}
+        if (filter.action.forward) {
+            action.forward = action.forward
+        }
+        if (filter.action.addLabelIds) {
+            action.addLabelIds = filter.action.addLabelIds.map((label) => {
+                return labels.get(label)
+            })
+        }
+        if (filter.action.removeLabelIds) {
+            action.removeLabelIds = filter.action.removeLabelIds.map((label) => {
+                return labels.get(label)
+            })
+        }
+        filter.action = action
     }
 
     if (commander.dryrun) {
@@ -111,7 +159,31 @@ async function main() {
         }
     } else {
         console.log(`Updating filters`)
-        await client.setFilters(filters)
+        const xs: google.gmail_v1.Schema$Filter[] = []
+        await client.setFilters(
+            filters,
+            {
+                delete: async (_, i, length) => {
+                    console.log(`Deleting ${i + 1} of ${length} filter`)
+                    return
+                },
+                insert: async (f, i, length) => {
+                    xs.push(f)
+                    console.log(`Creating ${i + 1} of ${length} filter`)
+                    return
+                },
+            })
+
+        if (commander.applyFilter) {
+            console.log(`Applying filters`)
+            let cnt = 0
+            for (const filter of xs) {
+                console.log(`Applying ${cnt + 1} of ${xs.length} filter`)
+                await client.applyFilter(filter)
+
+                cnt += 1
+            }
+        }
     }
 }
 
