@@ -112,6 +112,25 @@ export class GmailClient {
             cnt += 1
         }
     }
+    public async applyFilter(filter: google.gmail_v1.Schema$Filter) {
+        const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
+        const messages = await gmail.users.messages.list({
+            userId: "me",
+            q: filter.criteria.query
+        })
+        const ids = (messages.data.messages || []).map(x => x.id)
+        for (let i = 0; i < ids.length; i += 1000) {
+            await gmail.users.messages.batchModify({
+                requestBody: {
+                    addLabelIds: filter.action.addLabelIds,
+                    ids: ids.slice(i, Math.min(i + 1000, ids.length)),
+                    removeLabelIds: filter.action.removeLabelIds
+                },
+                userId: "me"
+            })
+        }
+        return
+    }
 
     public async getFilters() {
         const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})

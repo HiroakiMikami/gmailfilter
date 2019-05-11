@@ -32,6 +32,7 @@ async function main() {
         .option("--backup <path>", "Create backup of filters before updating")
         .option("--dryrun")
         .option("--create-label")
+        .option("--apply-filter")
         .option("--filter <path>", "The filter JavaScript file")
         .parse(process.argv)
 
@@ -158,10 +159,12 @@ async function main() {
         }
     } else {
         console.log(`Updating filters`)
+        let fs: google.gmail_v1.Schema$Filter[] = []
         await client.setFilters(
             filters,
             {
-                insert: async (_, i, length) => {
+                insert: async (f, i, length) => {
+                    fs.push(f)
                     console.log(`Creating ${i + 1} of ${length} filter`)
                     return
                 },
@@ -170,6 +173,17 @@ async function main() {
                     return
                 },
             })
+
+        if (commander.applyFilter) {
+            console.log(`Applying filters`)
+            let cnt = 0
+            for (const filter of fs) {
+                console.log(`Applying ${cnt + 1} of ${fs.length} filter`)
+                await client.applyFilter(filter)
+
+                cnt += 1
+            }
+        }
     }
 }
 
