@@ -3,7 +3,10 @@ import { OAuth2Client } from "googleapis-common"
 import * as readline from "readline"
 import { FilterUtils } from "./utils"
 
-const SCOPES = ["https://www.googleapis.com/auth/gmail.labels", "https://www.googleapis.com/auth/gmail.settings.basic"]
+const SCOPES = [
+    "https://www.googleapis.com/auth/gmail.labels",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+    "https://www.googleapis.com/auth/gmail.modify"]
 
 export interface ICredentials {
     installed: {
@@ -16,10 +19,12 @@ export interface ISetFiltersCallback {
     insert?: (filter: google.gmail_v1.Schema$Filter, index: number, length: number) => Promise<void>
     delete?: (filter: google.gmail_v1.Schema$Filter, index: number, length: number) => Promise<void>
 }
+export interface ICreateLabelsCallback {
+    create?: (label: string, index: number, length: number) => Promise<void>
+}
 
 export class GmailClient {
     private oAuth2Client: OAuth2Client
-    private labels: Promise<ReadonlyMap<string, string>>
     constructor(private credentials: ICredentials, private tokens: any | null) {}
     public async authorize() {
         /* Reference: https://developers.google.com/gmail/api/quickstart/nodejs */
@@ -45,43 +50,32 @@ export class GmailClient {
 
         this.oAuth2Client.setCredentials(this.tokens)
     }
-
-    public async convertLabelNameToId(action: google.gmail_v1.Schema$FilterAction) {
-        if (!this.labels) {
-            const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
-            this.labels = gmail.users.labels.list({ userId: "me" }).then((res) => {
-                const m = new Map<string, string>()
-                for (const label of res.data.labels) {
-                    m.set(label.name, label.id)
-                }
-                return m
+    public async getLabels() {
+        const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
+        const labels = await gmail.users.labels.list({ userId: "me" }).then((res) => {
+            const m = new Map<string, string>()
+            for (const label of res.data.labels) {
+                m.set(label.name, label.id)
+            }
+            return m
+        })
+        return labels
+    }
+    public async createLabels(labels: string[], callback?: ICreateLabelsCallback) {
+        const gmail = google.google.gmail({version: "v1", auth: this.oAuth2Client})
+        let cnt = 0
+        for (const label of labels) {
+            await gmail.users.labels.create({
+                requestBody: {
+                    name: label
+                },
+                userId: "me"
             })
+            if (callback && callback.create) {
+                await callback.create(label, cnt, labels.length)
+            }
+            cnt += 1
         }
-
-        const labels = await this.labels
-        const retval: google.gmail_v1.Schema$FilterAction = {}
-        if (action.forward) {
-            retval.forward = action.forward
-        }
-        if (action.addLabelIds) {
-            retval.addLabelIds = action.addLabelIds.map((label) => {
-                if (labels.has(label)) {
-                    return labels.get(label)
-                } else {
-                    return label
-                }
-            })
-        }
-        if (action.removeLabelIds) {
-            retval.removeLabelIds = action.removeLabelIds.map((label) => {
-                if (labels.has(label)) {
-                    return labels.get(label)
-                } else {
-                    return label
-                }
-            })
-        }
-        return retval
     }
 
     public async setFilters(
