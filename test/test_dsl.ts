@@ -2,197 +2,124 @@ import * as chai from "chai"
 const should = chai.should()
 
 import * as $ from "../src/dsl"
-import { Has, If, In, Is, K, Larger, Match, Not, Smaller } from "../src/dsl_syntax"
+import { And, Around, If, K, Mail, Match, Not, Or, subject, to } from "../src/dsl_syntax"
 
 describe("DSL", () => {
-    describe("syntax", () => {
-        it("create an instance of Key", () => {
-            K("key").should.deep.equal(new $.Key("key"))
-        })
-        it("create instances of CondIf", () => {
-            K("key").Larger(0).should.deep.equal(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Larger, 0))
-            K("key").Smaller(0).should.deep.equal(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Smaller, 0))
-            K("key").Is("value").should.deep.equal(
-                new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"))
-            Is("starred").should.deep.equal(new $.CondIfWithoutKey($.PredicateWithoutKey.Is, "starred"))
-            Has("attachment").should.deep.equal(new $.CondIfWithoutKey($.PredicateWithoutKey.Has, "attachment"))
-            In("chats").should.deep.equal(new $.CondIfWithoutKey($.PredicateWithoutKey.In, "chats"))
-            Not(In("chats")).should.deep.equal(new $.CondIfWithoutKey($.PredicateWithoutKey.In, "chats", true))
-        })
-        it("create instances of CondCase", () => {
-            Larger(0).should.deep.equal(new $.CondCase($.PredicateWithKey.Larger, 0))
-            Smaller(0).should.deep.equal(new $.CondCase($.PredicateWithKey.Smaller, 0))
-            Not(0).should.deep.equal(new $.CondCase($.PredicateWithKey.Is, 0, true))
-            Not(Smaller(0)).should.deep.equal(new $.CondCase($.PredicateWithKey.Smaller, 0, true))
-        })
-        it("create instances of If", () => {
-            If(K("key").Is("value"), {}).should.deep.equal(
-                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"),
-                [{}], [], null))
-            If(K("key").Is("value"), {}).Else({}).should.deep.equal(
-                new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value"),
-                [{}], [], new $.Else([{}])))
-            If(K("key").Is("value1"), [{}, {}])
-             .Elif(K("key").Is("value2"), {})
-             .Elif(K("key").Is("value3"), {})
-             .Else({})
-            .should.deep.equal(
-                 new $.If(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value1"),
-                 [{}, {}],
-                 [
-                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value2"), [{}]),
-                     new $.Elif(new $.CondIfWithKey(new $.Key("key"), $.PredicateWithKey.Is, "value3"), [{}]),
-                 ],
-                 new $.Else([{}]),
-            ))
-        })
-        it("create instances of Match", () => {
-            Match(K("key"))
-                .Case("value", {})
-            .should.deep.equal(
-                new $.Match(new $.Key("key"), [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), [{}])], null))
-            Match(K("key"))
-                .Case("value", {})
-                .Otherwise({})
-            .should.deep.equal(
-                new $.Match(new $.Key("key"),
-                    [new $.Case(new $.CondCase($.PredicateWithKey.Is, "value"), [{}])], new $.Otherwise([{}])))
-        })
-        it("complex case", () => {
-            Match(K("key"))
-                .Case(Not("value"),
-                    If(K("key2").Is("foo"), {})
-                      .Else({}))
-                .Otherwise({})
-            .should.deep.equal(
-                new $.Match(new $.Key("key"),
-                [
-                    new $.Case(new $.CondCase($.PredicateWithKey.Is, "value", true),
-                        [
-                            new $.If(new $.CondIfWithKey(new $.Key("key2"), $.PredicateWithKey.Is, "foo"), [{}], [],
-                            new $.Else([{}])),
-                        ]),
-                ],
-                new $.Otherwise([{}])),
-            )
-        })
-    })
     describe("#stringify", () => {
+        it("stringify Primitive", () => {
+            $.stringify("foo").should.equal("foo")
+            $.stringify(0).should.equal("0")
+            $.stringify(Around("w1", "w2")).should.equal("w1 AROUND w2")
+            $.stringify(Around("w1", "w2").Within(1)).should.equal("w1 AROUND 1 w2")
+        })
         it("stringify Predicate", () => {
-            $.PredicateWithKey.stringify($.PredicateWithKey.Is).should.equal("")
-            $.PredicateWithKey.stringify($.PredicateWithKey.Larger).should.equal("larger")
-            $.PredicateWithKey.stringify($.PredicateWithKey.Smaller).should.equal("smaller")
-            $.PredicateWithoutKey.stringify($.PredicateWithoutKey.Is).should.equal("is")
-            $.PredicateWithoutKey.stringify($.PredicateWithoutKey.In).should.equal("in")
-            $.PredicateWithoutKey.stringify($.PredicateWithoutKey.Has).should.equal("has")
+            $.stringify($.Predicate.Contains).should.equal("contains")
+            $.stringify($.Predicate.Has).should.equal("has")
+            $.stringify($.Predicate.Larger).should.equal("larger")
+            $.stringify($.Predicate.Smaller).should.equal("smaller")
+            $.stringify($.Predicate.After).should.equal("after")
+            $.stringify($.Predicate.Before).should.equal("before")
+            $.stringify($.Predicate.Older).should.equal("older")
+            $.stringify($.Predicate.Newer).should.equal("newer")
+            $.stringify($.Predicate.OlderThan).should.equal("older_than")
+            $.stringify($.Predicate.NewerThan).should.equal("newer_than")
+            $.stringify($.Predicate.Is).should.equal("is")
+            $.stringify($.Predicate.In).should.equal("in")
         })
     })
     describe("#toQuery", () => {
-        it("create a query string from CondIf", () => {
-            $.toQuery(new $.CondIfWithKey(K("key"), $.PredicateWithKey.Is, "value")).should.equal("key:\"value\"")
-            $.toQuery(new $.CondIfWithKey(K("size"), $.PredicateWithKey.Larger, 0)).should.equal("larger:0")
-            $.toQuery(new $.CondIfWithKey(K("size"), $.PredicateWithKey.Smaller, 0)).should.equal("smaller:0")
-            $.toQuery(new $.CondIfWithoutKey($ .PredicateWithoutKey.Has, "attachment")).should.equal("has:attachment")
+        it("create a query string from Cond", () => {
+            $.toQuery(to.Contains("value")).should.equal('to:"value"')
+            $.toQuery(Mail.Contains("value")).should.equal('"value"')
+            $.toQuery(Mail.Larger("1")).should.equal('larger:"1"')
+            $.toQuery(Not(to.Contains("value"))).should.deep.equal(
+                new $.QueryUniaryOperator('to:"value"', $.UniaryOperator.Not))
+            $.toQuery(And(to.Contains("value"))).should.deep.equal(
+                new $.QueryMultiaryOperator(['to:"value"'], $.MultiaryOperator.And))
+            $.toQuery(Or(to.Contains("value"))).should.deep.equal(
+                new $.QueryMultiaryOperator(['to:"value"'], $.MultiaryOperator.Or))
         })
-        it("create a query string from CondCase and Key", () => {
-            $.toQuery(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.equal("key:\"0\"")
-            $.toQuery(new $.CondCase($.PredicateWithKey.Larger, 0), K("size")).should.equal("larger:0")
-            $.toQuery(new $.CondCase($.PredicateWithKey.Smaller, 0), K("size")).should.equal("smaller:0")
-        })
-        it("throw an expcetion when the key name is not size and predicate is larger or smaller", () => {
-            should.Throw(() => $.toQuery(new $.CondIfWithKey(K("subject"), $.PredicateWithKey.Smaller, 0)), /.*/)
-            should.Throw(() => $.toQuery(new $.CondCase($.PredicateWithKey.Smaller, 0), K("subject")), /.*/)
+        it("create a query string from Pattern and Key", () => {
+            $.toQuery(new $.PatternPrimitive("value"), to).should.equal('to:"value"')
+            $.toQuery(Not("value"), to).should.deep.equal(
+                new $.QueryUniaryOperator('to:"value"', $.UniaryOperator.Not))
+            $.toQuery(And(Not("value")), to).should.deep.equal(
+                new $.QueryMultiaryOperator(
+                    [new $.QueryUniaryOperator('to:"value"', $.UniaryOperator.Not)],
+                    $.MultiaryOperator.And))
+            $.toQuery(Or(Not("value")), to).should.deep.equal(
+                new $.QueryMultiaryOperator(
+                    [new $.QueryUniaryOperator('to:"value"', $.UniaryOperator.Not)],
+                    $.MultiaryOperator.Or))
         })
     })
     describe("#toCriteria", () => {
-        it("create a criteria instance", () => {
-            $.toCriteria(new $.CondCase($.PredicateWithKey.Is, 0), K("key")).should.deep.equal({ query: "key:\"0\"" })
-            $.toCriteria(new $.CondCase($.PredicateWithKey.Is, 0, true), K("key"))
-                .should.deep.equal({ negatedQuery: "key:\"0\"" })
-        })
-    })
-    describe("Criteria", () => {
-        describe("#not", () => {
-            it("negate a criteria", () => {
-                $.Criteria.not({ query: "q" }).should.deep.equal({ negatedQuery: "q" })
-                $.Criteria.not({ negatedQuery: "q" }).should.deep.equal({ query: "q" })
-                $.Criteria.not({ query: "q1", negatedQuery: "q2" })
-                    .should.deep.equal({ query: "q2", negatedQuery: "q1" })
-            })
-        })
-        describe("#merge", () => {
-            it("merge an array of criterias", () => {
-                $.Criteria.merge([
-                    { query: "q" },
-                ]).should.deep.equal({ query: "q" })
-                $.Criteria.merge([
-                    { query: "q" }, { query: "q2"},
-                ]).should.deep.equal({ query: "q q2" })
-                $.Criteria.merge([
-                    { negatedQuery: "q" }, { negatedQuery: "q2"},
-                ]).should.deep.equal({ negatedQuery: "q q2" })
-                $.Criteria.merge([
-                    { query: "q" }, { negatedQuery: "q2"},
-                ]).should.deep.equal({ query: "q", negatedQuery: "q2" })
-            })
+        it("create a Criteria instance from Query", () => {
+            $.toCriteria($.toQuery(to.Contains("value"))).should.deep.equal({ query: 'to:"value"' })
+            $.toCriteria($.toQuery(Not(to.Contains("value")))).should.deep.equal(
+                { query: '(NOT to:"value")' })
+            $.toCriteria($.toQuery(And(to.Contains("value"), to.Contains("value2")))).should.deep.equal(
+                { query: '(to:"value" to:"value2")' })
+            $.toCriteria($.toQuery(Or(to.Contains("value"), to.Contains("value2")))).should.deep.equal(
+                { query: '(to:"value" OR to:"value2")' })
         })
     })
     describe("#evaluate", () => {
         it("create filters from If", () => {
-            $.evaluate(If(K("subject").Is("foo"), {})).should.deep.equal([
+            $.evaluate(If(subject.Contains("foo"), {})).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:\"foo\"" },
+                    criteria: { query: "(subject:\"foo\")" },
                 },
             ])
         })
         it("create filters from If-Elif", () => {
             $.evaluate(
-                If(K("subject").Is("foo"), {})
-                .Elif(Not(K("to").Is("bar")), {}),
+                If(subject.Contains("foo"), {})
+                .Elif(Not(to.Contains("bar")), {}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:\"foo\"" },
+                    criteria: { query: "(subject:\"foo\")" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:\"foo\" to:\"bar\"" },
+                    criteria: { query: "((NOT subject:\"foo\") (NOT to:\"bar\"))" },
                 },
             ])
         })
         it("create filters from If-Else", () => {
             $.evaluate(
-                If(K("subject").Is("foo"), {})
+                If(subject.Contains("foo"), {})
                 .Else({}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:\"foo\"" },
+                    criteria: { query: "(subject:\"foo\")" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:\"foo\"" },
+                    criteria: { query: "((NOT subject:\"foo\"))" },
                 },
             ])
         })
         it("create filters from If-Elif-Else", () => {
             $.evaluate(
-                If(K("subject").Is("foo"), {})
-                .Elif(Not(K("to").Is("bar")), {})
+                If(subject.Contains("foo"), {})
+                .Elif(Not(to.Contains("bar")), {})
                 .Else({}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "subject:\"foo\"" },
+                    criteria: { query: "(subject:\"foo\")" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "subject:\"foo\" to:\"bar\"" },
+                    criteria: { query: "((NOT subject:\"foo\") (NOT to:\"bar\"))" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:\"bar\"", negatedQuery: "subject:\"foo\"" },
+                    criteria: { query: "((NOT subject:\"foo\") (NOT (NOT to:\"bar\")))" },
                 },
             ])
         })
@@ -202,72 +129,72 @@ describe("DSL", () => {
         })
         it("create filters from Match-Case", () => {
             $.evaluate(
-                Match(K("to"))
+                Match(to)
                     .Case("value", {})
                     .Case("value2", {}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:\"value\"" },
+                    criteria: { query: "(to:\"value\")" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:\"value2\"" },
+                    criteria: { query: "(to:\"value2\")" },
                 },
             ])
         })
         it("create filters from Match-Case-Otherwise", () => {
             $.evaluate(
-                Match(K("to"))
+                Match(to)
                     .Case("value", {})
                     .Case("value2", {})
                     .Otherwise({}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:\"value\"" },
+                    criteria: { query: "(to:\"value\")" },
                 },
                 {
                     action: {},
-                    criteria: { query: "to:\"value2\"" },
+                    criteria: { query: "(to:\"value2\")" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "to:\"value\" to:\"value2\"" },
+                    criteria: { query: "((NOT to:\"value\") (NOT to:\"value2\"))" },
                 },
             ])
         })
         it("complex case 1", () => {
             $.evaluate(
-                If(Is("starred"),
-                    Match(K("to"))
+                If(Mail.Is("starred"),
+                    Match(to)
                         .Case("foo@bar", {}))
                 .Else({}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "is:starred to:\"foo@bar\"" },
+                    criteria: { query: "(is:\"starred\" (to:\"foo@bar\"))" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "is:starred" },
+                    criteria: { query: "((NOT is:\"starred\"))" },
                 },
             ])
         })
         it("complex case 2", () => {
             $.evaluate(
-                If(Is("starred"), {})
+                If(Mail.Is("starred"), {})
                 .Else(
-                    Match(K("to"))
+                    Match(to)
                         .Case("foo@bar", {})),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "is:starred" },
+                    criteria: { query: "(is:\"starred\")" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "is:starred", query: "to:\"foo@bar\"" },
+                    criteria: { query: "((NOT is:\"starred\") (to:\"foo@bar\"))" },
                 },
             ])
         })
@@ -275,47 +202,47 @@ describe("DSL", () => {
             $.evaluate(
                 Match(K("to"))
                     .Case("foo@bar",
-                        If(Is("starred"), {}))
+                        If(Mail.Is("starred"), {}))
                     .Otherwise({}),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:\"foo@bar\" is:starred" },
+                    criteria: { query: "(to:\"foo@bar\" (is:\"starred\"))" },
                 },
                 {
                     action: {},
-                    criteria: { negatedQuery: "to:\"foo@bar\"" },
+                    criteria: { query: "((NOT to:\"foo@bar\"))" },
                 },
             ])
         })
         it("complex case 4", () => {
             $.evaluate(
-                Match(K("to"))
+                Match(to)
                     .Case("foo@bar", {})
                     .Otherwise(
-                        If(Is("starred"), {})),
+                        If(Mail.Is("starred"), {})),
             ).should.deep.equal([
                 {
                     action: {},
-                    criteria: { query: "to:\"foo@bar\"" },
+                    criteria: { query: "(to:\"foo@bar\")" },
                 },
                 {
                     action: {},
-                    criteria: { query: "is:starred", negatedQuery: "to:\"foo@bar\"" },
+                    criteria: { query: "((NOT to:\"foo@bar\") (is:\"starred\"))" },
                 },
             ])
         })
         it("split addLabelIds", () => {
             $.evaluate(
-                Match(K("to")).Case("foo@bar", {addLabelIds: ["foo", "bar"], removeLabelIds: ["test"] }),
+                Match(to).Case("foo@bar", {addLabelIds: ["foo", "bar"], removeLabelIds: ["test"] }),
             ).should.deep.equal([
                 {
                     action: {addLabelIds: ["foo"], removeLabelIds: ["test"] },
-                    criteria: { query: "to:\"foo@bar\"" },
+                    criteria: { query: "(to:\"foo@bar\")" },
                 },
                 {
                     action: { addLabelIds: ["bar"] },
-                    criteria: { query: "to:\"foo@bar\"" },
+                    criteria: { query: "(to:\"foo@bar\")" },
                 },
             ])
         })

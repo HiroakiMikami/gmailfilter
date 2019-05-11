@@ -6,15 +6,22 @@ import { GmailClient } from "./gmail"
 
 const prefix = `
 const $ = require("./dsl_syntax")
+const Around = $.Around
 const Match = $.Match
 const If = $.If
+const Mail = $.Mail
 const Not = $.Not
-const Has = $.Has
-const In = $.In
-const Is = $.Is
-const Larger = $.Larger
-const Smaller = $.Smaller
-const K = $.K;
+const And = $.And
+const Or = $.Or
+const K = $.K
+const to = $.to
+const from = $.from
+const subject = $.subject
+const cc = $.cc
+const bcc = $.bcc
+const list = $.list
+const deliveredto = $.deliveredto
+const Rfc822msgid = $.Rfc822msgid;
 
 `
 

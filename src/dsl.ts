@@ -1,63 +1,212 @@
 import * as google from "googleapis"
 
 /*
- * Filter        := Match | If
- * Expression    := Action | Filter
- * Body          := Expression | Expression*
- * Match         := match Key Case* [Otherwise]
- * Case          := case CaseCond Body
- * Otherwise     := otherwise Body
- * CaseCond      := larger <v> | smaller <v> | <v> | not CaseCond
- * If            := if CondIf Body [Elif*] [Else]
- * Elif          := elif CondIf Body
- * Else          := else Body
- * CondIf        := Key larger <v> | Key smaller <v> | Key is <v> | is <value> | has <value> | not CondIf
- * Key           := k(<str>)
+ * Privmitive := <str> | <number> | around <str> <str> within <number>
+ * Filter     := Match | If
+ * Expression := Action | Filter
+ * Body       := Expression*
+ * Match      := match Key Case+ [Otherwise]
+ * Case       := case Pattern Body
+ * Otherwise  := otherwise Body
+ * Key        := to | from | subject | cc | bcc | list | deliveredto | Rfc822msgid | K <str>
+ * Pattern    := Primitive | not Pattern | and Pattern+ | or Pattern+
+ * If         := if Cond Body [Elif*] [Else*]
+ * Elif       := elif Cond Body
+ * Else       := else Body
+ * Cond       := CondMail | CondKey | not Cond | and Cond+ | or Cond+
+ * CondKey    := Key contains Primitive
+ * CondMail   := main contains Primitive |
+ *               mail larger Primitive | mail smaller Primitive |
+ *               mail after Primitive | mail before Primitive |
+ *               mail older Primitive | mail newer Primitive
+ *               mail older_than Primitive | mail newer_than Primitive |
+ *               mail is Primitive | mail in Primitive | mail has Primitive
  */
 
-export enum PredicateWithKey {
-    Larger, Smaller, Is,
+export enum UniaryOperator {
+    Not,
 }
-export enum PredicateWithoutKey {
-    In, Is, Has,
+export enum MultiaryOperator {
+    And, Or,
+}
+
+export type Primitive = string | number | PrimitiveAround
+export function isPrimitive(prim: any): prim is Primitive {
+    if (typeof prim === "string" || typeof prim === "number") {
+        return true
+    } else if (prim instanceof PrimitiveAround) {
+        return true
+    }
+    return false
+}
+export class PrimitiveAround {
+    constructor(
+        public readonly word1: string,
+        public readonly word2: string,
+        public readonly nwords?: number) {}
 }
 export type Action = google.gmail_v1.Schema$FilterAction
 
 export type Filter = Match | If
 export type Expression = Action | Filter
+export type Body = ReadonlyArray<Expression>
+
 export class Match {
-    constructor(public key: Key, public caseBlock: ReadonlyArray<Case>, public otherwiseBlock: Otherwise | null) {}
+    constructor(
+        public readonly key: Key,
+        public readonly caseBlocks: ReadonlyArray<Case>,
+        public readonly otherwiseBlock?: Otherwise) {}
 }
 export class Case {
-    constructor(public cond: CondCase, public body: ReadonlyArray<Expression>) {}
+    constructor(public readonly pattern: Pattern, public readonly body: Body) {}
 }
 export class Otherwise {
-    constructor(public body: ReadonlyArray<Expression>) {}
-}
-export class CondCase {
-    constructor(public predicate: PredicateWithKey, public value: number | string, public not: boolean = false) {}
-}
-
-export class If {
-    constructor(public cond: CondIf, public body: ReadonlyArray<Expression>,
-                public elifBlock: ReadonlyArray<Elif>, public elseBlock: Else | null) {}
-}
-export class Elif {
-    constructor(public cond: CondIf, public body: ReadonlyArray<Expression>) {}
-}
-export class Else {
-    constructor(public body: ReadonlyArray<Expression>) {}
-}
-export type CondIf = CondIfWithKey | CondIfWithoutKey
-export class CondIfWithKey {
-    constructor(public key: Key, public predicate: PredicateWithKey,
-                public value: number | string, public not: boolean = false) {}
-}
-export class CondIfWithoutKey {
-    constructor(public predicate: PredicateWithoutKey, public value: string, public not: boolean = false) {}
+    constructor(public readonly body: Body) {}
 }
 export class Key {
-    constructor(public keyName: string) {}
+    constructor(public readonly name: string) {}
+}
+
+export type Pattern = PatternPrimitive | PatternUniaryOperator | PatternMultiaryOperator
+export function isPattern(pattern: any): pattern is Pattern {
+    return pattern instanceof PatternPrimitive ||
+           pattern instanceof PatternUniaryOperator ||
+           pattern instanceof PatternMultiaryOperator
+}
+export class PatternPrimitive {
+    constructor(public readonly value: Primitive) {}
+}
+export class PatternUniaryOperator {
+    constructor(
+        public readonly value: Pattern,
+        public readonly operator: UniaryOperator) {}
+}
+export class PatternMultiaryOperator {
+    constructor(
+        public readonly values: ReadonlyArray<Pattern>,
+        public readonly operator: MultiaryOperator) {}
+}
+export class If {
+    constructor(
+        public readonly cond: Cond,
+        public readonly body: Body,
+        public readonly elifBlocks: ReadonlyArray<Elif>,
+        public readonly elseBlock?: Else) {}
+}
+export class Elif {
+    constructor(
+        public readonly cond: Cond,
+        public readonly body: Body) {}
+}
+export class Else {
+    constructor(public readonly body: Body) {}
+}
+export type Cond = CondMail | CondKey | CondUniaryOperator | CondMultiaryOperator
+export function isCond(cond: any): cond is Cond {
+    return cond instanceof CondMail ||
+           cond instanceof CondKey ||
+           cond instanceof CondUniaryOperator ||
+           cond instanceof CondMultiaryOperator
+}
+
+export enum Predicate {
+    Contains = "contains", Has = "has", Larger = "larger", Smaller = "smaller",
+    After = "after", Before = "before", Older = "older", Newer = "newer",
+    OlderThan = "older_than", NewerThan = "newer_than", Is = "is", In = "in",
+}
+export class CondMail {
+    constructor(
+        public readonly pred: Predicate,
+        public readonly value: Primitive) {}
+}
+export class CondKey {
+    constructor(
+        public readonly pred: Predicate,
+        public readonly value: Primitive,
+        public readonly key: Key) {}
+}
+export class CondUniaryOperator {
+    constructor(
+        public readonly cond: Cond,
+        public readonly operator: UniaryOperator) {}
+}
+export class CondMultiaryOperator {
+    constructor(
+        public readonly conds: ReadonlyArray<Cond>,
+        public readonly operator: MultiaryOperator) {}
+}
+
+export function stringify(pred: Predicate | Primitive): string {
+    if (pred instanceof PrimitiveAround) {
+        if (pred.nwords) {
+            return `${pred.word1} AROUND ${pred.nwords} ${pred.word2}`
+        } else {
+            return `${pred.word1} AROUND ${pred.word2}`
+        }
+    } else {
+        return `${pred}`
+    }
+}
+
+export type Query = string | QueryUniaryOperator | QueryMultiaryOperator
+export class QueryUniaryOperator {
+    constructor(public readonly query: Query, public readonly operator: UniaryOperator) {}
+}
+export class QueryMultiaryOperator {
+    constructor(
+        public readonly queries: ReadonlyArray<Query>,
+        public readonly operator: MultiaryOperator) {}
+}
+
+export function toQuery(cond: Cond): Query
+export function toQuery(cond: Pattern, key: Key): Query
+export function toQuery(cond: Cond | Pattern, key?: Key): Query {
+    if (isCond(cond)) {
+        if (cond instanceof CondKey) {
+            return `${cond.key.name}:"${stringify(cond.value)}"`
+        } else if (cond instanceof CondMail) {
+            if (cond.pred === Predicate.Contains) {
+                return `"${stringify(cond.value)}"`
+            } else {
+                return `${stringify(cond.pred)}:"${stringify(cond.value)}"`
+            }
+        } else if (cond instanceof CondUniaryOperator) {
+            return new QueryUniaryOperator(toQuery(cond.cond), cond.operator)
+        } else if (cond instanceof CondMultiaryOperator) {
+            return new QueryMultiaryOperator(cond.conds.map(toQuery), cond.operator)
+        }
+    } else {
+        if (cond instanceof PatternPrimitive) {
+            return `${key.name}:"${stringify(cond.value)}"`
+        } else if (cond instanceof PatternUniaryOperator) {
+            return new QueryUniaryOperator(toQuery(cond.value, key), cond.operator)
+        } else if (cond instanceof PatternMultiaryOperator) {
+            return new QueryMultiaryOperator(
+                cond.values.map((x) => toQuery(x, key)),
+                cond.operator)
+        }
+    }
+    return ""
+}
+
+export type Criteria = google.gmail_v1.Schema$FilterCriteria
+export function toCriteria(query: Query): Criteria {
+    if (query instanceof QueryUniaryOperator) {
+        if (query.operator === UniaryOperator.Not) {
+            const q = toCriteria(query.query)
+            return { query: `(NOT ${q.query})` }
+        }
+    } else if (query instanceof QueryMultiaryOperator) {
+        const qs = query.queries.map(toCriteria).map((x) => x.query)
+        if (query.operator === MultiaryOperator.And) {
+            return { query: `(${qs.join(" ")})`}
+        } else if (query.operator === MultiaryOperator.Or) {
+            return { query: `(${qs.join(" OR ")})`}
+        }
+    } else {
+        return { query }
+    }
+    return {}
 }
 
 export class EvaluationError extends Error {
@@ -65,197 +214,104 @@ export class EvaluationError extends Error {
         super(message)
     }
 }
-
-export namespace PredicateWithKey {
-    export function stringify(predicate: PredicateWithKey): string {
-        if (predicate === PredicateWithKey.Is) {
-            return ""
-        } else if (predicate === PredicateWithKey.Larger) {
-            return "larger"
-        } else if (predicate === PredicateWithKey.Smaller) {
-            return "smaller"
-        }
-        throw new EvaluationError(`Invalid value (${predicate}) to PredicateWithKey#stringify`)
-    }
-}
-export namespace PredicateWithoutKey {
-    export function stringify(predicate: PredicateWithoutKey): string {
-        if (predicate === PredicateWithoutKey.Is) {
-            return "is"
-        } else if (predicate === PredicateWithoutKey.In) {
-            return "in"
-        } else if (predicate === PredicateWithoutKey.Has) {
-            return "has"
-        }
-        throw new EvaluationError(`Invalid value (${predicate}) to PredicateWithoutKey#stringify`)
-    }
-}
-export function toQuery(cond: CondIf): string
-export function toQuery(cond: CondCase, key: Key): string
-export function toQuery(cond: CondIf | CondCase, key?: Key): string {
-    if (cond instanceof CondIfWithKey) {
-        if (cond.predicate === PredicateWithKey.Is) {
-            return `${cond.key.keyName}:"${cond.value}"`
-        } else {
-            if (cond.key.keyName !== "size") {
-                throw new EvaluationError(`Larger|Smaller is not used with ${cond.key.keyName} key`)
-            }
-            return `${PredicateWithKey.stringify(cond.predicate)}:${cond.value}`
-        }
-    } else if (cond instanceof CondIfWithoutKey) {
-        return `${PredicateWithoutKey.stringify(cond.predicate)}:${cond.value}`
-    } else {
-        if (cond.predicate === PredicateWithKey.Is) {
-            return `${key.keyName}:"${cond.value}"`
-        } else {
-            if (key.keyName !== "size") {
-                throw new EvaluationError(`Larger|Smaller is not used with ${key.keyName} key`)
-            }
-            return `${PredicateWithKey.stringify(cond.predicate)}:${cond.value}`
-        }
-    }
-}
-export function toCriteria(cond: CondIf): google.gmail_v1.Schema$FilterCriteria
-export function toCriteria(cond: CondCase, key: Key): google.gmail_v1.Schema$FilterCriteria
-export function toCriteria(cond: CondIf | CondCase, key?: Key): google.gmail_v1.Schema$FilterCriteria {
-    let query = ""
-    if (cond instanceof CondCase) {
-        query = toQuery(cond, key)
-    } else {
-        query = toQuery(cond)
-    }
-    if (cond.not) {
-        return { negatedQuery: query }
-    } else  {
-        return { query }
-    }
-}
-export namespace Criteria {
-    export function not(criteria: google.gmail_v1.Schema$FilterCriteria): google.gmail_v1.Schema$FilterCriteria {
-        const retval: google.gmail_v1.Schema$FilterCriteria = {}
-        if (criteria.negatedQuery) {
-            retval.query = criteria.negatedQuery
-        }
-        if (criteria.query) {
-            retval.negatedQuery = criteria.query
-        }
-        return retval
-    }
-    export function merge(
-        criterias: ReadonlyArray<google.gmail_v1.Schema$FilterCriteria>): google.gmail_v1.Schema$FilterCriteria {
-        const retval: google.gmail_v1.Schema$FilterCriteria = {}
-        for (const criteria of criterias) {
-            if (criteria.query) {
-                if (!retval.query) {
-                    retval.query = criteria.query
-                } else {
-                    retval.query += ` ${criteria.query}`
+export function evaluate(f: Filter): google.gmail_v1.Schema$Filter[] {
+    function evaluateBody(body: Body, query: ReadonlyArray<Query>): Array<{ query: Query, action: Action}> {
+        const filters = []
+        for (const exp of body) {
+            if (exp instanceof If || exp instanceof Match) {
+                const fs = _evaluate(exp)
+                for (const x of fs) {
+                    filters.push({
+                        action: x.action,
+                        query: new QueryMultiaryOperator([...query, x.query], MultiaryOperator.And),
+                    })
                 }
-            }
-            if (criteria.negatedQuery) {
-                if (!retval.negatedQuery) {
-                    retval.negatedQuery = criteria.negatedQuery
-                } else {
-                    retval.negatedQuery += ` ${criteria.negatedQuery}`
-                }
-            }
-        }
-        return retval
-    }
-}
-export function evaluateBody(body: ReadonlyArray<Expression>, c: google.gmail_v1.Schema$FilterCriteria) {
-    const filters = []
-    for (const exp of body) {
-        if (exp instanceof If || exp instanceof Match) {
-            const fs = evaluate(exp)
-            for (const f of fs) {
+            } else {
                 filters.push({
-                    action: f.action,
-                    criteria: Criteria.merge([c, f.criteria]),
+                    action: exp,
+                    query: new QueryMultiaryOperator([...query], MultiaryOperator.And),
                 })
             }
-        } else {
-            filters.push({
-                action: exp,
-                criteria: c,
-            })
         }
+        return filters
     }
-    return filters
-}
-export function evaluate(filter: Filter): google.gmail_v1.Schema$Filter[] {
-    const filters: google.gmail_v1.Schema$Filter[] = []
+    function _evaluate(filter: Filter): Array<{ query: Query, action: Action}> {
+        const filters: Array<{ query: Query, action: Action}> = []
 
-    if (filter instanceof If) {
-        let c: google.gmail_v1.Schema$FilterCriteria = {}
+        if (filter instanceof If) {
+            const qs: Query[] = []
 
-        // If-Elif
-        const elifs = Array.from(filter.elifBlock)
-        elifs.unshift(new Elif(filter.cond, filter.body))
-        for (const elif of elifs) {
-            const criteria = toCriteria(elif.cond)
-            const c1 = Criteria.merge([c, criteria])
-            c = Criteria.merge([c, Criteria.not(criteria)])
-
-            for (const f of evaluateBody(elif.body, c1)) {
-                filters.push(f)
-            }
-        }
-
-        // Else
-        if (filter.elseBlock) {
-            for (const f of evaluateBody(filter.elseBlock.body, c)) {
-                filters.push(f)
-            }
-        }
-    } else {
-        if (filter.caseBlock.length === 0) {
-            throw new EvaluationError("There is not case block in Match expression")
-        }
-        let c: google.gmail_v1.Schema$FilterCriteria = {}
-
-        // Case
-        for (const ca of filter.caseBlock) {
-            const criteria = toCriteria(ca.cond, filter.key)
-            c = Criteria.merge([c, Criteria.not(criteria)])
-
-            for (const f of evaluateBody(ca.body, criteria)) {
-                filters.push(f)
-            }
-        }
-
-        // Otherwise
-        if (filter.otherwiseBlock) {
-            for (const f of evaluateBody(filter.otherwiseBlock.body, c)) {
-                filters.push(f)
-            }
-        }
-    }
-
-    // split addLabelIds
-    const retval = []
-    for (const f of filters) {
-        if (f.action.addLabelIds) {
-            f.action.addLabelIds.forEach((label, index) => {
-                if (index === 0) {
-                    retval.push({
-                        action: {
-                            addLabelIds: [label],
-                            removeLabelIds: f.action.removeLabelIds,
-                        },
-                        criteria: f.criteria,
-                    })
-                } else {
-                    retval.push({
-                        action: { addLabelIds: [label] },
-                        criteria: f.criteria,
-                    })
+            // If-Elif
+            const elifs = Array.from(filter.elifBlocks)
+            elifs.unshift(new Elif(filter.cond, filter.body))
+            for (const elif of elifs) {
+                const query = toQuery(elif.cond)
+                for (const x of evaluateBody(elif.body, [...qs, query])) {
+                    filters.push(x)
                 }
-            })
+
+                qs.push(new QueryUniaryOperator(query, UniaryOperator.Not))
+            }
+
+            // Else
+            if (filter.elseBlock) {
+                for (const x of evaluateBody(filter.elseBlock.body, qs)) {
+                    filters.push(x)
+                }
+            }
         } else {
-            retval.push(f)
+            if (filter.caseBlocks.length === 0) {
+                throw new EvaluationError("There is not case block in Match expression")
+            }
+            const qs: Query[] = []
+
+            // Case
+            for (const ca of filter.caseBlocks) {
+                const query = toQuery(ca.pattern, filter.key)
+                qs.push(new QueryUniaryOperator(query, UniaryOperator.Not))
+
+                for (const x of evaluateBody(ca.body, [query])) {
+                    filters.push(x,
+                        )
+                }
+            }
+
+            // Otherwise
+            if (filter.otherwiseBlock) {
+                for (const x of evaluateBody(filter.otherwiseBlock.body, qs)) {
+                    filters.push(x)
+                }
+            }
         }
+
+        // split addLabelIds
+        const retval = []
+        for (const x of filters) {
+            if (x.action.addLabelIds) {
+                x.action.addLabelIds.forEach((label, index) => {
+                    if (index === 0) {
+                        retval.push({
+                            action: {
+                                addLabelIds: [label],
+                                removeLabelIds: x.action.removeLabelIds,
+                            },
+                            query: x.query,
+                        })
+                    } else {
+                        retval.push({
+                            action: { addLabelIds: [label] },
+                            query: x.query,
+                        })
+                    }
+                })
+            } else {
+                retval.push(x)
+            }
+        }
+        return retval
     }
 
-    return retval
+    return _evaluate(f).map((x) => {
+        return { action: x.action, criteria: toCriteria(x.query) }
+    })
 }
